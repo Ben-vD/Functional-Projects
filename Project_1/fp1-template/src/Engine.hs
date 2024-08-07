@@ -19,8 +19,6 @@ matches r [] = nullable r
 matches r [c] = nullable (deriv r c)
 matches r (c:cs) = matches (deriv r c) cs
 
-matches _ _ = False
-
 -- Simplification
 
 -- | Tests whether the regex matches the entire string.
@@ -28,10 +26,13 @@ matches _ _ = False
 matchesSimp :: Regex -> String -> Bool
 
 matchesSimp r [] = nullable r
-matchesSimp r [c] = nullable (simplify (deriv r c))
-matchesSimp r (c:cs) = matchesSimp (simplify (deriv r c)) cs
+matchesSimp r [c] = nullable (fullSimplify (deriv r c))
+matchesSimp r (c:cs) = matchesSimp (fullSimplify (deriv r c)) cs
 
-matchesSimp _ _ = False
+fullSimplify :: Regex -> Regex
+fullSimplify r
+  | r == simplify r = r
+  | otherwise = fullSimplify (simplify r)
 
 -- Partial matching
 

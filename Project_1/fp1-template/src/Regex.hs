@@ -48,6 +48,7 @@ simplify (Concatenation Epsilon r) = simplify r
 simplify (Concatenation r Epsilon) = simplify r
 simplify (Concatenation r1 r2) = Concatenation (simplify r1) (simplify r2)
 
+simplify (Alternation []) = EmptySet
 simplify (Alternation [r]) = r
 simplify (Alternation r)
   | elem (Negation EmptySet) r = Negation EmptySet

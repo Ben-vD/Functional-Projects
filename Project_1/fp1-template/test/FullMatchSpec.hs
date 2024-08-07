@@ -1,6 +1,6 @@
 module FullMatchSpec (spec) where
 
-import Engine (matches)
+import Engine (matches, matchesSimp)
 import Regex (Regex (..))
 import Test.Hspec
 
@@ -153,3 +153,152 @@ spec =
 
       it "does not match minimum range" $ do
         matches (Range (Char 'b') 1 Nothing) "" `shouldBe` False
+
+--------------------------------------------------
+
+    describe "epsilon (Simplification)" $ do
+      it "matches empty string" $ do
+        matchesSimp Epsilon "" `shouldBe` True
+
+      it "does not match non-empty string" $ do
+        matchesSimp Epsilon "a" `shouldBe` False
+
+    describe "character (Simplification)" $ do
+      it "matches character" $ do
+        matchesSimp (Char 'a') "a" `shouldBe` True
+
+      it "does not match character" $ do
+        matchesSimp (Char 'a') "b" `shouldBe` False
+
+      it "does not match empty" $ do
+        matchesSimp (Char 'a') "" `shouldBe` False
+
+    describe "alternation (Simplification)" $ do
+      it "matches left" $ do
+        matchesSimp (Alternation [Char 'a', Char 'b']) "a" `shouldBe` True
+
+      it "matches right" $ do
+        matchesSimp (Alternation [Char 'a', Char 'b']) "b" `shouldBe` True
+
+      it "matches neither" $ do
+        matchesSimp (Alternation [Char 'a', Char 'b']) "c" `shouldBe` False
+
+    describe "intersection (Simplification)" $ do
+      it "matches both" $ do
+        matchesSimp (Intersection [Char 'a', Char 'a']) "a" `shouldBe` True
+
+      it "matches left only" $ do
+        matchesSimp (Intersection [Char 'a', Char 'b']) "a" `shouldBe` False
+
+      it "matches right only" $ do
+        matchesSimp (Intersection [Char 'a', Char 'b']) "b" `shouldBe` False
+
+    describe "concatenation (Simplification)" $ do
+      it "matches sequence" $ do
+        matchesSimp (Concatenation (Char 'a') (Char 'b')) "ab" `shouldBe` True
+
+      it "does not match sequence" $ do
+        matchesSimp (Concatenation (Char 'a') (Concatenation (Char 'b') (Char 'c'))) "ab" `shouldBe` False
+
+      it "matches nullable first" $ do
+        matchesSimp (Concatenation Epsilon (Char 'x')) "x" `shouldBe` True
+
+    describe "negation (Simplification)" $ do
+      it "does not match character" $ do
+        matchesSimp (Negation (Char 'a')) "b" `shouldBe` True
+
+      it "matches not not" $
+        do
+          matchesSimp (Negation (Negation (Alternation [Char 'a', Concatenation (Char 'a') (Char 'b')]))) "ab"
+            `shouldBe` matchesSimp (Alternation [Char 'a', Concatenation (Char 'a') (Char 'b')]) "ab"
+
+    describe "star (Simplification)" $ do
+      it "matches empty" $ do
+        matchesSimp (Star (Char 'a')) "" `shouldBe` True
+
+      it "matches single" $ do
+        matchesSimp (Star (Char 'a')) "a" `shouldBe` True
+
+      it "matches many" $ do
+        matchesSimp (Star (Alternation [Char 'a', Concatenation (Char 'a') (Char 'b')])) "aaaabababaab" `shouldBe` True
+
+      it "does not match" $ do
+        matchesSimp (Star (Alternation [Char 'a', Concatenation (Char 'a') (Char 'b')])) "aaaabbababaabc" `shouldBe` False
+
+    describe "range (Simplification)" $ do
+      it "matches 2-3 a's" $ do
+        matchesSimp (Range (Char 'a') 2 (Just 3)) "aa" `shouldBe` True
+
+      it "does not match 2-3 a's" $ do
+        matchesSimp (Range (Char 'a') 2 (Just 3)) "aaaa" `shouldBe` False
+
+      it "matches star" $ do
+        matchesSimp (Range (Alternation [Char 'a', Concatenation (Char 'b') (Star Any)]) 0 Nothing) "abxyabb"
+          `shouldBe` matchesSimp (Star (Alternation [Char 'a', Concatenation (Char 'b') (Star Any)])) "abxyabb"
+
+--------------------------------------------------
+    -- Additional test cases
+    describe "epsilon (additional) (Simplification)" $ do
+      it "matches nested epsilon" $ do
+        matchesSimp (Concatenation Epsilon Epsilon) "" `shouldBe` True
+
+      it "does not match epsilon with character" $ do
+        matchesSimp (Concatenation Epsilon (Char 'a')) "" `shouldBe` False
+
+    describe "character (additional) (Simplification)" $ do
+      it "matches special character" $ do
+        matchesSimp (Char '@') "@" `shouldBe` True
+
+      it "does not match different special character" $ do
+        matchesSimp (Char '@') "#" `shouldBe` False
+
+    describe "alternation (additional) (Simplification)" $ do
+      it "matches with longer alternation list" $ do
+        matchesSimp (Alternation [Char 'a', Char 'b', Char 'c', Char 'd']) "c" `shouldBe` True
+
+      it "does not match with longer alternation list" $ do
+        matchesSimp (Alternation [Char 'a', Char 'b', Char 'c', Char 'd']) "e" `shouldBe` False
+
+    describe "intersection (additional) (Simplification)" $ do
+      it "matches complex intersection" $ do
+        matchesSimp (Intersection [Alternation [Char 'a', Char 'b'], Alternation [Char 'b', Char 'c']]) "b" `shouldBe` True
+
+      it "does not match complex intersection" $ do
+        matchesSimp (Intersection [Alternation [Char 'a', Char 'b'], Alternation [Char 'c', Char 'd']]) "b" `shouldBe` False
+
+    describe "concatenation (additional) (Simplification)" $ do
+      it "matches longer sequence" $ do
+        matchesSimp (Concatenation (Char 'a') (Concatenation (Char 'b') (Concatenation (Char 'c') (Char 'd')))) "abcd" `shouldBe` True
+
+      it "does not match longer sequence" $ do
+        matchesSimp (Concatenation (Char 'a') (Concatenation (Char 'b') (Concatenation (Char 'c') (Char 'd')))) "abc" `shouldBe` False
+
+    describe "negation (additional) (Simplification)" $ do
+      it "matches negation of sequence" $ do
+        matchesSimp (Negation (Concatenation (Char 'a') (Char 'b'))) "ac" `shouldBe` True
+
+      it "does not match negation of sequence" $ do
+        matchesSimp (Negation (Concatenation (Char 'a') (Char 'b'))) "ab" `shouldBe` False
+
+    describe "star (additional) (Simplification)" $ do
+      it "matches empty with complex star" $ do
+        matchesSimp (Star (Concatenation (Char 'a') (Char 'b'))) "" `shouldBe` True
+
+      it "matches multiple repetitions with complex star" $ do
+        matchesSimp (Star (Concatenation (Char 'a') (Char 'b'))) "ababab" `shouldBe` True
+
+      it "does not match with complex star" $ do
+        matchesSimp (Star (Concatenation (Char 'a') (Char 'b'))) "ababac" `shouldBe` False
+
+    describe "range (additional) (Simplification)" $ do
+      it "matches exact range" $ do
+        matchesSimp (Range (Char 'a') 3 (Just 3)) "aaa" `shouldBe` True
+
+      it "does not match exact range" $ do
+        matchesSimp (Range (Char 'a') 3 (Just 3)) "aa" `shouldBe` False
+
+      it "matches minimum range" $ do
+        matchesSimp (Range (Char 'b') 1 Nothing) "bbbb" `shouldBe` True
+
+      it "does not match minimum range" $ do
+        matchesSimp (Range (Char 'b') 1 Nothing) "" `shouldBe` False
